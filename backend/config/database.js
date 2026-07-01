@@ -1,5 +1,17 @@
 const mysql = require('mysql2/promise');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
+
+// SSL certificate for TiDB Cloud (if available)
+let sslConfig = undefined;
+const certPath = path.join(__dirname, '../cert/isrgrootx1.pem');
+if (fs.existsSync(certPath)) {
+  sslConfig = { ca: fs.readFileSync(certPath) };
+} else if (process.env.DB_HOST && process.env.DB_HOST.includes('tidbcloud')) {
+  // For TiDB Cloud without local cert file - use system root CAs
+  sslConfig = { rejectUnauthorized: true };
+}
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
@@ -11,7 +23,8 @@ const pool = mysql.createPool({
   connectionLimit: 20,
   queueLimit: 0,
   timezone: '+05:30',
-  dateStrings: false
+  dateStrings: false,
+  ssl: sslConfig
 });
 
 // Test the connection
