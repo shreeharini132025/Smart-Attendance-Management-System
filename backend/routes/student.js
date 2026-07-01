@@ -20,27 +20,32 @@ router.get('/dashboard', async (req, res) => {
     const [[overallStats]] = await db.query(`
       SELECT 
         COUNT(DISTINCT cs.id) AS total_sessions,
-        COUNT(CASE WHEN ar.status='present' THEN 1 END) AS attended_sessions,
-        ROUND(COUNT(CASE WHEN ar.status='present' THEN 1 END) * 100.0 / NULLIF(COUNT(DISTINCT cs.id), 0), 2) AS overall_percentage
-      FROM student_enrollments se
-      JOIN faculty_subjects fs ON se.subject_id = fs.subject_id
-      JOIN class_sessions cs ON fs.id = cs.faculty_subject_id AND cs.status = 'completed'
+        COUNT(DISTINCT IF(ar.status='present', ar.id, NULL)) AS attended_sessions,
+        ROUND(COUNT(DISTINCT IF(ar.status='present', ar.id, NULL)) * 100.0 / NULLIF(COUNT(DISTINCT cs.id), 0), 2) AS overall_percentage
+      FROM (
+        SELECT DISTINCT se.student_id, se.subject_id FROM student_enrollments se WHERE se.student_id = ?
+      ) se_dedup
+      JOIN faculty_subjects fs ON se_dedup.subject_id = fs.subject_id
+      JOIN class_sessions cs ON fs.id = cs.faculty_subject_id AND cs.status IN ('active', 'completed')
       LEFT JOIN attendance_records ar ON cs.id = ar.session_id AND ar.student_id = ?
-      WHERE se.student_id = ?
     `, [studentId, studentId]);
 
     // Subject-wise attendance
     const [subjectAttendance] = await db.query(`
       SELECT sub.id, sub.name AS subject_name, sub.code, sub.credits,
              COUNT(DISTINCT cs.id) AS total_sessions,
-             COUNT(CASE WHEN ar.status='present' THEN 1 END) AS attended,
-             ROUND(COUNT(CASE WHEN ar.status='present' THEN 1 END) * 100.0 / NULLIF(COUNT(DISTINCT cs.id), 0), 2) AS percentage
-      FROM student_enrollments se
-      JOIN subjects sub ON se.subject_id = sub.id
+             COUNT(DISTINCT IF(ar.status='present', ar.id, NULL)) AS attended,
+             ROUND(COUNT(DISTINCT IF(ar.status='present', ar.id, NULL)) * 100.0 / NULLIF(COUNT(DISTINCT cs.id), 0), 2) AS percentage
+      FROM (
+        SELECT DISTINCT se.subject_id FROM student_enrollments se
+        INNER JOIN classrooms cr ON se.subject_id = cr.subject_id AND cr.is_active = 1
+        INNER JOIN classroom_students cstd ON cr.id = cstd.classroom_id AND cstd.student_id = se.student_id
+        WHERE se.student_id = ?
+      ) se_dedup
+      JOIN subjects sub ON se_dedup.subject_id = sub.id
       JOIN faculty_subjects fs ON sub.id = fs.subject_id
-      LEFT JOIN class_sessions cs ON fs.id = cs.faculty_subject_id AND cs.status = 'completed'
+      LEFT JOIN class_sessions cs ON fs.id = cs.faculty_subject_id AND cs.status IN ('active', 'completed')
       LEFT JOIN attendance_records ar ON cs.id = ar.session_id AND ar.student_id = ?
-      WHERE se.student_id = ?
       GROUP BY sub.id, sub.name, sub.code, sub.credits
       ORDER BY percentage ASC
     `, [studentId, studentId]);
@@ -81,9 +86,13 @@ router.get('/dashboard', async (req, res) => {
 // Accepts: { qr_token, otp } — used when student scans QR then enters OTP
 router.post('/attendance/mark', async (req, res) => {
   try {
-    const [studentRows] = await db.query('SELECT id FROM students WHERE user_id = ?', [req.user.id]);
+    const [studentRows] = await db.query(
+      'SELECT s.id, s.semester_id FROM students s WHERE s.user_id = ?',
+      [req.user.id]
+    );
     if (!studentRows.length) return res.status(404).json({ success: false, message: 'Student profile not found.' });
     const studentId = studentRows[0].id;
+    const studentSemesterId = studentRows[0].semester_id;
 
     const { qr_token, otp, device_fingerprint, latitude, longitude } = req.body;
 
@@ -93,7 +102,7 @@ router.post('/attendance/mark', async (req, res) => {
 
     // Find active session by QR token
     const [sessions] = await db.query(`
-      SELECT cs.*, fs.subject_id FROM class_sessions cs
+      SELECT cs.*, fs.subject_id, fs.semester_id AS fs_semester_id FROM class_sessions cs
       JOIN faculty_subjects fs ON cs.faculty_subject_id = fs.id
       WHERE cs.qr_token = ? AND cs.status = 'active'
     `, [qr_token]);
@@ -110,6 +119,12 @@ router.post('/attendance/mark', async (req, res) => {
     if (session.otp_code !== otp) {
       return res.status(400).json({ success: false, message: 'Incorrect OTP. Please try again.' });
     }
+
+    // Auto-enroll if not already enrolled (so attendance history works)
+    await db.query(
+      'INSERT IGNORE INTO student_enrollments (student_id, subject_id, semester_id) VALUES (?, ?, ?)',
+      [studentId, session.subject_id, session.fs_semester_id || studentSemesterId]
+    );
 
     return await _recordAttendance(res, session, studentId, otp, device_fingerprint, latitude, longitude, req.ip);
   } catch (err) {
@@ -340,33 +355,40 @@ router.get('/subjects', async (req, res) => {
       SELECT sub.id, sub.name, sub.name AS subject_name,
              sub.code, sub.credits, sub.subject_type,
              MAX(f.id) AS faculty_id, MAX(u.name) AS faculty_name, MAX(d.name) AS department_name,
-             MAX(cl.name) AS classroom_name, MAX(cl.room_number) AS classroom_room,
+             (
+               SELECT cr2.name FROM classrooms cr2
+               INNER JOIN classroom_students cs3 ON cs3.classroom_id = cr2.id
+               WHERE cr2.subject_id = sub.id AND cr2.is_active = 1 AND cs3.student_id = ?
+               LIMIT 1
+             ) AS classroom_name,
+             (
+               SELECT cr2.room_number FROM classrooms cr2
+               INNER JOIN classroom_students cs3 ON cs3.classroom_id = cr2.id
+               WHERE cr2.subject_id = sub.id AND cr2.is_active = 1 AND cs3.student_id = ?
+               LIMIT 1
+             ) AS classroom_room,
              COUNT(DISTINCT cs.id) AS total_sessions,
              COUNT(DISTINCT cs.session_date) AS total_days,
-             COUNT(DISTINCT cs.session_date) * 7 AS total_possible,
-             COUNT(CASE WHEN ar.status='present' THEN 1 END) AS attended,
+             COUNT(DISTINCT IF(ar.status='present', ar.id, NULL)) AS attended,
              ROUND(
-               COUNT(CASE WHEN ar.status='present' THEN 1 END) * 100.0
-               / NULLIF(COUNT(DISTINCT cs.session_date) * 7, 0),
+               COUNT(DISTINCT IF(ar.status='present', ar.id, NULL)) * 100.0
+               / NULLIF(COUNT(DISTINCT cs.id), 0),
              2) AS percentage
-      FROM student_enrollments se
-      JOIN subjects sub ON se.subject_id = sub.id
+      FROM (
+        SELECT DISTINCT se.subject_id FROM student_enrollments se
+        INNER JOIN classrooms cr ON se.subject_id = cr.subject_id AND cr.is_active = 1
+        INNER JOIN classroom_students cstd ON cr.id = cstd.classroom_id AND cstd.student_id = se.student_id
+        WHERE se.student_id = ?
+      ) se_dedup
+      JOIN subjects sub ON se_dedup.subject_id = sub.id
       JOIN faculty_subjects fs ON sub.id = fs.subject_id
       JOIN faculty f ON fs.faculty_id = f.id
       JOIN users u ON f.user_id = u.id
       JOIN departments d ON sub.department_id = d.id
-      LEFT JOIN classrooms cl ON cl.subject_id = sub.id
-                              AND cl.faculty_id = fs.faculty_id
-                              AND cl.is_active = 1
-                              AND EXISTS (
-                                SELECT 1 FROM classroom_students c_s
-                                WHERE c_s.classroom_id = cl.id AND c_s.student_id = se.student_id
-                              )
-      LEFT JOIN class_sessions cs ON fs.id = cs.faculty_subject_id AND cs.status = 'completed'
+      LEFT JOIN class_sessions cs ON fs.id = cs.faculty_subject_id AND cs.status IN ('active', 'completed')
       LEFT JOIN attendance_records ar ON cs.id = ar.session_id AND ar.student_id = ?
-      WHERE se.student_id = ?
       GROUP BY sub.id, sub.name, sub.code, sub.credits, sub.subject_type
-    `, [studentId, studentId]);
+    `, [studentId, studentId, studentId, studentId]);
 
     res.json({ success: true, data: rows });
   } catch (err) {

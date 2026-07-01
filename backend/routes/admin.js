@@ -336,11 +336,21 @@ router.put('/subjects/:id', authorize('admin'), async (req, res) => {
 });
 
 router.delete('/subjects/:id', authorize('admin'), async (req, res) => {
+  const conn = await db.getConnection();
   try {
-    await db.query('DELETE FROM subjects WHERE id = ?', [req.params.id]);
-    res.json({ success: true, message: 'Subject deleted.' });
+    await conn.beginTransaction();
+    await conn.query('DELETE FROM student_enrollments WHERE subject_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM classrooms WHERE subject_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM faculty_subjects WHERE subject_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM subjects WHERE id = ?', [req.params.id]);
+    await conn.commit();
+    res.json({ success: true, message: 'Subject and related assignments/enrollments deleted.' });
   } catch (err) {
+    await conn.rollback();
+    console.error('Delete subject error:', err);
     res.status(500).json({ success: false, message: 'Server error.' });
+  } finally {
+    conn.release();
   }
 });
 
@@ -734,11 +744,70 @@ router.put('/classrooms/:id', authorize('admin'), async (req, res) => {
 
 // DELETE /api/admin/classrooms/:id
 router.delete('/classrooms/:id', authorize('admin'), async (req, res) => {
+  const conn = await db.getConnection();
   try {
-    await db.query('DELETE FROM classrooms WHERE id = ?', [req.params.id]);
-    res.json({ success: true, message: 'Classroom deleted.' });
+    await conn.beginTransaction();
+    const [[classroom]] = await conn.query('SELECT subject_id, semester_id, faculty_id FROM classrooms WHERE id = ?', [req.params.id]);
+    if (classroom) {
+      // 1. Delete attendance records for sessions of this classroom
+      await conn.query(`
+        DELETE ar FROM attendance_records ar
+        INNER JOIN class_sessions cs ON ar.session_id = cs.id
+        INNER JOIN faculty_subjects fs ON cs.faculty_subject_id = fs.id
+        WHERE fs.faculty_id = ? AND fs.subject_id = ? AND fs.semester_id = ?
+      `, [classroom.faculty_id, classroom.subject_id, classroom.semester_id]);
+
+      // 2. Delete class sessions of this classroom
+      await conn.query(`
+        DELETE cs FROM class_sessions cs
+        INNER JOIN faculty_subjects fs ON cs.faculty_subject_id = fs.id
+        WHERE fs.faculty_id = ? AND fs.subject_id = ? AND fs.semester_id = ?
+      `, [classroom.faculty_id, classroom.subject_id, classroom.semester_id]);
+
+      // 3. Delete classroom student assignments
+      const [students] = await conn.query('SELECT student_id FROM classroom_students WHERE classroom_id = ?', [req.params.id]);
+      await conn.query('DELETE FROM classroom_students WHERE classroom_id = ?', [req.params.id]);
+
+      // 4. Delete classroom faculty assignments
+      await conn.query('DELETE FROM classroom_faculty WHERE classroom_id = ?', [req.params.id]);
+
+      // 5. Delete student enrollments if no other active classrooms exist for this subject/semester
+      const [[otherActiveCr]] = await conn.query(`
+        SELECT id FROM classrooms WHERE subject_id = ? AND semester_id = ? AND id != ? AND is_active = 1
+      `, [classroom.subject_id, classroom.semester_id, req.params.id]);
+
+      if (!otherActiveCr) {
+        // No other active classrooms exist: delete all enrollments for this subject/semester
+        await conn.query(
+          'DELETE FROM student_enrollments WHERE subject_id = ? AND semester_id = ?',
+          [classroom.subject_id, classroom.semester_id]
+        );
+      } else {
+        // Other active classrooms exist: only delete enrollments of students in this classroom who aren't in other classrooms
+        for (const s of students) {
+          const [[otherClass]] = await conn.query(`
+            SELECT cr.id FROM classrooms cr
+            JOIN classroom_students cs ON cr.id = cs.classroom_id
+            WHERE cs.student_id = ? AND cr.subject_id = ? AND cr.semester_id = ? AND cr.id != ? AND cr.is_active = 1
+          `, [s.student_id, classroom.subject_id, classroom.semester_id, req.params.id]);
+          if (!otherClass) {
+            await conn.query(
+              'DELETE FROM student_enrollments WHERE student_id = ? AND subject_id = ? AND semester_id = ?',
+              [s.student_id, classroom.subject_id, classroom.semester_id]
+            );
+          }
+        }
+      }
+    }
+    await conn.query('DELETE FROM classrooms WHERE id = ?', [req.params.id]);
+    await conn.commit();
+    res.json({ success: true, message: 'Classroom and all related data deleted.' });
   } catch (err) {
+    await conn.rollback();
+    console.error('Delete classroom error:', err);
     res.status(500).json({ success: false, message: 'Server error.' });
+  } finally {
+    conn.release();
   }
 });
 

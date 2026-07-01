@@ -75,6 +75,22 @@ router.get('/subjects', async (req, res) => {
   try {
     const [faculty] = await db.query('SELECT id FROM faculty WHERE user_id = ?', [req.user.id]);
     if (!faculty.length) return res.status(404).json({ success: false, message: 'Faculty profile not found.' });
+
+    if (req.query.all === 'true') {
+      const [rows] = await db.query(`
+        SELECT fs.id AS faculty_subject_id, sub.id AS subject_id,
+               sub.name, sub.code, sub.credits, sub.subject_type,
+               d.name AS department_name, sem.name AS semester_name
+        FROM faculty_subjects fs
+        JOIN subjects sub ON fs.subject_id = sub.id
+        JOIN departments d ON sub.department_id = d.id
+        JOIN semesters sem ON fs.semester_id = sem.id
+        WHERE fs.faculty_id = ?
+        GROUP BY fs.id, sub.id, sub.name, sub.code, sub.credits, sub.subject_type, d.name, sem.name
+      `, [faculty[0].id]);
+      return res.json({ success: true, data: rows });
+    }
+
     const [rows] = await db.query(`
       SELECT fs.id AS faculty_subject_id, sub.id AS subject_id,
              sub.name, sub.code, sub.credits, sub.subject_type,
