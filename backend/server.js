@@ -14,7 +14,7 @@ const server = http.createServer(app);
 // ── Socket.IO Setup ─────────────────────────────────────────
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: process.env.FRONTEND_URL || 'https://smart-attendance-management-system-jade.vercel.app',
     methods: ['GET', 'POST']
   }
 });
@@ -42,7 +42,7 @@ io.on('connection', (socket) => {
 // ── Security Middlewares ────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: process.env.FRONTEND_URL || 'https://smart-attendance-management-system-jade.vercel.app',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -102,7 +102,7 @@ server.listen(PORT, () => {
   ╔═══════════════════════════════════════════╗
   ║   Smart Attendance Management System      ║
   ║   Server running on port ${PORT}          ║
-  ║   http://localhost:${PORT}                ║
+  ║   https://smart-attendance-management-system-jade.vercel.app║
   ╚═══════════════════════════════════════════╝
   `);
 });
