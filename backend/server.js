@@ -102,7 +102,7 @@ server.listen(PORT, () => {
   ╔═══════════════════════════════════════════╗
   ║   Smart Attendance Management System      ║
   ║   Server running on port ${PORT}          ║
-  ║   https://smart-attendance-management-system-jade.vercel.app║
+  ║   http://localhost:${PORT}                ║
   ╚═══════════════════════════════════════════╝
   `);
 });
