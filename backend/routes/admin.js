@@ -153,7 +153,8 @@ router.get('/students', authorize('admin'), async (req, res) => {
     const [rows] = await db.query(query, params);
     res.json({ success: true, data: rows });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error.' });
+    console.error('GET /students error:', err);
+    res.status(500).json({ success: false, message: 'Server error.', debug: err.message, code: err.code });
   }
 });
 
