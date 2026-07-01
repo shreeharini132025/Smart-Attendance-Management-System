@@ -417,6 +417,8 @@ router.put('/attendance/:id', async (req, res) => {
 router.get('/sessions', async (req, res) => {
   try {
     const [faculty] = await db.query('SELECT id FROM faculty WHERE user_id = ?', [req.user.id]);
+    if (!faculty.length) return res.status(404).json({ success: false, message: 'Faculty profile not found.' });
+
     const { from_date, to_date, faculty_subject_id } = req.query;
 
     let query = `
@@ -435,12 +437,13 @@ router.get('/sessions', async (req, res) => {
     if (to_date) { query += ' AND cs.session_date <= ?'; params.push(to_date); }
     if (faculty_subject_id) { query += ' AND cs.faculty_subject_id = ?'; params.push(faculty_subject_id); }
 
-    query += ' GROUP BY cs.id ORDER BY cs.session_date DESC, cs.hour_number';
+    query += ' GROUP BY cs.id, sub.name, sub.code ORDER BY cs.session_date DESC, cs.hour_number';
 
     const [rows] = await db.query(query, params);
     res.json({ success: true, data: rows });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error.' });
+    console.error('Faculty sessions error:', err);
+    res.status(500).json({ success: false, message: 'Server error.', debug: err.message, code: err.code });
   }
 });
 
@@ -448,6 +451,7 @@ router.get('/sessions', async (req, res) => {
 router.get('/analytics', async (req, res) => {
   try {
     const [faculty] = await db.query('SELECT id FROM faculty WHERE user_id = ?', [req.user.id]);
+    if (!faculty.length) return res.status(404).json({ success: false, message: 'Faculty profile not found.' });
 
     // Subject-wise attendance
     const [subjectWise] = await db.query(`
@@ -492,7 +496,7 @@ router.get('/analytics', async (req, res) => {
       LEFT JOIN class_sessions cs ON fs.id = cs.faculty_subject_id AND cs.status='completed'
       LEFT JOIN attendance_records ar ON cs.id = ar.session_id AND ar.student_id = s.id
       WHERE fs.faculty_id = ?
-      GROUP BY s.id, sub.id
+      GROUP BY s.id, u.name, s.roll_number, sub.id, sub.name
       HAVING percentage < 75 OR percentage IS NULL
       ORDER BY percentage ASC LIMIT 20
     `, [faculty[0].id]);
