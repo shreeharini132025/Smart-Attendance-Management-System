@@ -178,10 +178,11 @@ router.post('/students', authorize('admin'), async (req, res) => {
     res.status(201).json({ success: true, message: 'Student created successfully.' });
   } catch (err) {
     await conn.rollback();
+    console.error('POST /students error:', err);
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(400).json({ success: false, message: 'Email or roll number already exists.' });
     }
-    res.status(500).json({ success: false, message: 'Server error.' });
+    res.status(500).json({ success: false, message: 'Server error.', debug: err.message, code: err.code });
   } finally {
     conn.release();
   }
