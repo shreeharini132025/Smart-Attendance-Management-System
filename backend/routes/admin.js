@@ -490,6 +490,18 @@ const multer = require('multer');
 const ExcelJS = require('exceljs');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+function cleanCellValue(val) {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'object') {
+    if (val.text !== undefined) return String(val.text);
+    if (val.result !== undefined) return String(val.result);
+    if (val.richText && Array.isArray(val.richText)) {
+      return val.richText.map(t => t.text || '').join('');
+    }
+  }
+  return String(val);
+}
+
 // Helper: read first worksheet from uploaded buffer
 async function readWorkbook(buffer) {
   const wb = new ExcelJS.Workbook();
@@ -501,7 +513,7 @@ async function readWorkbook(buffer) {
     if (idx === 1) { row.eachCell(c => headers.push(String(c.value || '').trim().toLowerCase().replace(/\s+/g, '_'))); }
     else {
       const obj = {};
-      headers.forEach((h, i) => { obj[h] = row.getCell(i + 1).value ?? ''; });
+      headers.forEach((h, i) => { obj[h] = cleanCellValue(row.getCell(i + 1).value); });
       rows.push(obj);
     }
   });
@@ -913,7 +925,7 @@ router.post('/classrooms/:id/import-students', authorize('admin'), upload.single
   const classroomId = req.params.id;
 
   // Verify classroom exists
-  const [crCheck] = await db.query('SELECT id, name, subject_id, semester_id FROM classrooms WHERE id = ?', [classroomId]);
+  const [crCheck] = await db.query('SELECT id, name, subject_id, semester_id, department_id FROM classrooms WHERE id = ?', [classroomId]);
   if (!crCheck.length) return res.status(404).json({ success: false, message: 'Classroom not found.' });
   const classroomInfo = crCheck[0];
 
@@ -926,6 +938,7 @@ router.post('/classrooms/:id/import-students', authorize('admin'), upload.single
     try {
       await conn.beginTransaction();
       for (const [i, row] of rows.entries()) {
+        const name = String(row.name || row.full_name || '').trim();
         const rollNumber = String(row.roll_number || row['roll number'] || row.rollnumber || '').trim();
         const email = String(row.email || '').trim().toLowerCase();
         const rowNum = i + 2;
@@ -951,13 +964,50 @@ router.post('/classrooms/:id/import-students', authorize('admin'), upload.single
           );
         }
 
-        if (!studentRows || !studentRows.length) {
-          results.errors.push(`Row ${rowNum}: Student not found (roll: "${rollNumber}", email: "${email}")`);
-          results.not_found++;
-          continue;
-        }
+        let studentId;
+        if (studentRows && studentRows.length) {
+          studentId = studentRows[0].id;
+        } else {
+          // If the student doesn't exist, auto-create them!
+          if (!rollNumber || !email) {
+            results.errors.push(`Row ${rowNum}: Student not found. Both roll_number and email are required to automatically register them.`);
+            results.not_found++;
+            continue;
+          }
 
-        const studentId = studentRows[0].id;
+          // Check if email already exists in users
+          const [emailCheck] = await conn.query('SELECT id FROM users WHERE email = ?', [email]);
+          if (emailCheck.length) {
+            results.errors.push(`Row ${rowNum}: Email "${email}" is already used by a non-student user.`);
+            results.not_found++;
+            continue;
+          }
+
+          // Check if roll number already exists in students
+          const [rollCheck] = await conn.query('SELECT id FROM students WHERE roll_number = ?', [rollNumber]);
+          if (rollCheck.length) {
+            results.errors.push(`Row ${rowNum}: Roll number "${rollNumber}" is already registered.`);
+            results.not_found++;
+            continue;
+          }
+
+          try {
+            const hashed = await bcrypt.hash('Student@123', 10);
+            const [uRes] = await conn.query(
+              'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, "student")',
+              [name || email.split('@')[0], email, hashed]
+            );
+            const [sRes] = await conn.query(
+              'INSERT INTO students (user_id, roll_number, department_id, semester_id) VALUES (?, ?, ?, ?)',
+              [uRes.insertId, rollNumber, classroomInfo.department_id, classroomInfo.semester_id]
+            );
+            studentId = sRes.insertId;
+          } catch (e) {
+            results.errors.push(`Row ${rowNum}: Failed to register student: ${e.message}`);
+            results.not_found++;
+            continue;
+          }
+        }
 
         // Insert IGNORE handles duplicates silently
         const [r] = await conn.query(
