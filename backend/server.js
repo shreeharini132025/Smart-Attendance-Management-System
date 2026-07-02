@@ -121,6 +121,58 @@ app.get('/api/public-debug-db', async (req, res) => {
   }
 });
 
+// ── Public Clear Faculty Data Endpoint ──────────────────────
+app.get('/api/public-clear-faculty-data', async (req, res) => {
+  const db = require('./config/database');
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    
+    const email = req.query.email || 'faculty@smartattend.edu';
+    const [[user]] = await conn.query('SELECT id FROM users WHERE email = ?', [email]);
+    if (!user) {
+      await conn.rollback();
+      return res.status(404).json({ success: false, message: `User ${email} not found` });
+    }
+
+    const [[faculty]] = await conn.query('SELECT id FROM faculty WHERE user_id = ?', [user.id]);
+    if (!faculty) {
+      await conn.rollback();
+      return res.status(404).json({ success: false, message: `Faculty profile for ${email} not found` });
+    }
+
+    const facultyId = faculty.id;
+
+    // 1. Delete attendance records for sessions of this faculty
+    const [delRecords] = await conn.query(`
+      DELETE ar FROM attendance_records ar
+      INNER JOIN class_sessions cs ON ar.session_id = cs.id
+      INNER JOIN faculty_subjects fs ON cs.faculty_subject_id = fs.id
+      WHERE fs.faculty_id = ?
+    `, [facultyId]);
+
+    // 2. Delete class sessions of this faculty
+    const [delSessions] = await conn.query(`
+      DELETE cs FROM class_sessions cs
+      INNER JOIN faculty_subjects fs ON cs.faculty_subject_id = fs.id
+      WHERE fs.faculty_id = ?
+    `, [facultyId]);
+
+    await conn.commit();
+    res.json({
+      success: true,
+      message: `Successfully cleared dashboard data for ${email}`,
+      deletedRecords: delRecords.affectedRows,
+      deletedSessions: delSessions.affectedRows
+    });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ success: false, error: err.message });
+  } finally {
+    conn.release();
+  }
+});
+
 // ── Health Check ────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
   res.json({
