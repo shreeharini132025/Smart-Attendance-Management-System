@@ -22,7 +22,7 @@ export default function FacultyAnalytics() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="loading-center"><div className="spinner-lg spinner" /><p style={{ color: 'var(--text-muted)' }}>Loading analytics...</p></div>;
+  if (loading) return <div className="loading-center"><div className="spinner-lg spinner" /><p style={{ color: 'var(--text-muted)' }}>Loading...</p></div>;
 
   const subjectData = (data?.subjectWise || []).map(s => ({ name: s.code, avg: parseFloat(s.avg_percentage) || 0, students: s.total_students, sessions: s.total_sessions }));
   const dailyData = (data?.dailyTrend || []).map(d => ({ date: new Date(d.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }), sessions: d.sessions, present: d.present }));
