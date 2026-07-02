@@ -70,6 +70,54 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/faculty', require('./routes/faculty'));
 app.use('/api/student', require('./routes/student'));
 
+// ── Public DB Debug Endpoint ──────────────────────────────
+app.get('/api/public-debug-db', async (req, res) => {
+  const db = require('./config/database');
+  try {
+    const info = {
+      dbConfigExists: !!db,
+      tables: {}
+    };
+
+    // Test simple query
+    const [testQuery] = await db.query('SELECT 1 + 1 AS result');
+    info.testConnection = 'OK';
+    info.testResult = testQuery;
+
+    // Check table structures
+    const tablesToCheck = ['users', 'students', 'departments', 'semesters'];
+    for (const table of tablesToCheck) {
+      try {
+        const [columns] = await db.query(`DESCRIBE ${table}`);
+        info.tables[table] = columns.map(c => ({ field: c.Field, type: c.Type }));
+      } catch (err) {
+        info.tables[table] = { error: err.message };
+      }
+    }
+
+    // Test students query
+    try {
+      const query = `
+        SELECT s.*, u.name, u.email, u.phone, u.is_active, u.last_login,
+               d.name AS department_name, sem.name AS semester_name
+        FROM students s
+        JOIN users u ON s.user_id = u.id
+        JOIN departments d ON s.department_id = d.id
+        JOIN semesters sem ON s.semester_id = sem.id
+        ORDER BY u.name
+      `;
+      const [rows] = await db.query(query);
+      info.studentsQuery = { status: 'SUCCESS', count: rows.length };
+    } catch (err) {
+      info.studentsQuery = { status: 'FAILED', error: err.message, code: err.code };
+    }
+
+    res.json(info);
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
+
 // ── Health Check ────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
   res.json({
