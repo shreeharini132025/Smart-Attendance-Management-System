@@ -121,7 +121,7 @@ export default function AdminSubjects() {
         </div>
       </div>
 
-      {loading ? <div className="loading-center"><div className="spinner-lg spinner" /></div> : (
+      {loading ? <div className="loading-center"><div className="spinner-lg spinner" /><p style={{ color: 'var(--text-muted)' }}>Loading...</p></div> : (
         <div className="table-wrapper">
           <table>
             <thead><tr><th>Subject</th><th>Code</th><th>Department</th><th>Semester</th><th>Credits</th><th>Type</th><th>Actions</th></tr></thead>

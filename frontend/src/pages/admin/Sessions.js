@@ -215,6 +215,7 @@ export default function AdminSessions() {
       {loading ? (
         <div className="loading-center">
           <div className="spinner-lg spinner" />
+          <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="empty-state">

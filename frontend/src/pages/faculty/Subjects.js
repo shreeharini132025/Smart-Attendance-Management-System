@@ -94,7 +94,7 @@ export default function FacultySubjects() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="loading-center"><div className="spinner-lg spinner" /></div>;
+  if (loading) return <div className="loading-center"><div className="spinner-lg spinner" /><p style={{ color: 'var(--text-muted)' }}>Loading...</p></div>;
 
   return (
     <div>

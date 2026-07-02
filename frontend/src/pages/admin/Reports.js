@@ -107,7 +107,7 @@ export default function AdminReports() {
       )}
 
       {/* Report Table */}
-      {loading ? <div className="loading-center"><div className="spinner-lg spinner" /></div> : (
+      {loading ? <div className="loading-center"><div className="spinner-lg spinner" /><p style={{ color: 'var(--text-muted)' }}>Loading...</p></div> : (
         <div className="table-wrapper">
           <table>
             <thead><tr><th>Student</th><th>Roll No.</th><th>Department</th><th>Subject</th><th>Sessions</th><th>Attended</th><th>Percentage</th></tr></thead>

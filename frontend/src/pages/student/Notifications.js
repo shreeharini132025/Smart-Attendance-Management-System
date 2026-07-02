@@ -52,7 +52,7 @@ export default function StudentNotifications() {
         )}
       </div>
 
-      {loading ? <div className="loading-center"><div className="spinner-lg spinner" /></div> :
+      {loading ? <div className="loading-center"><div className="spinner-lg spinner" /><p style={{ color: 'var(--text-muted)' }}>Loading...</p></div> :
         notifs.length === 0 ? (
           <div className="card"><div className="empty-state"><Bell size={48} /><h3>No notifications</h3><p>You're all caught up!</p></div></div>
         ) : (

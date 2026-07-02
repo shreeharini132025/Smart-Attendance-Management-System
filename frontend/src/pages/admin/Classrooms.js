@@ -606,7 +606,7 @@ export default function Classrooms() {
 
       {/* Classroom Cards */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 80 }}><div className="spinner-lg spinner" /></div>
+        <div className="loading-center"><div className="spinner-lg spinner" /><p style={{ color: 'var(--text-muted)' }}>Loading...</p></div>
       ) : filtered.length === 0 ? (
         <div className="empty-state">
           <School size={52} style={{ opacity: 0.3 }} />

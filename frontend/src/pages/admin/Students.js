@@ -144,7 +144,7 @@ export default function AdminStudents() {
         </div>
       </div>
 
-      {loading ? <div className="loading-center"><div className="spinner-lg spinner" /></div> : (
+      {loading ? <div className="loading-center"><div className="spinner-lg spinner" /><p style={{ color: 'var(--text-muted)' }}>Loading...</p></div> : (
         <div className="table-wrapper">
           <table>
             <thead><tr><th>Student</th><th>Roll No.</th><th>Department</th><th>Semester</th><th>Section</th><th>Status</th><th>Actions</th></tr></thead>

@@ -14,7 +14,7 @@ export default function StudentSubjects() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="loading-center"><div className="spinner-lg spinner" /></div>;
+  if (loading) return <div className="loading-center"><div className="spinner-lg spinner" /><p style={{ color: 'var(--text-muted)' }}>Loading...</p></div>;
 
   // Split: subjects where attendance is already marked (attended > 0 in a completed session) vs active
   const attended = subjects.filter(s => parseInt(s.total_sessions) > 0 && parseInt(s.attended) >= 0 && parseInt(s.total_sessions) > 0 && s.percentage !== null);

@@ -309,7 +309,7 @@ export default function FacultySessions() {
         <button className="btn btn-outline" onClick={load}><RefreshCw size={16} /> Refresh</button>
       </div>
 
-      {loading ? <div className="loading-center"><div className="spinner-lg spinner" /></div> : (
+      {loading ? <div className="loading-center"><div className="spinner-lg spinner" /><p style={{ color: 'var(--text-muted)' }}>Loading...</p></div> : (
         <div className="table-wrapper">
           <table>
             <thead><tr><th>Subject</th><th>Date</th><th>Hour</th><th>Time</th><th>Present</th><th>Status</th><th>Action</th></tr></thead>

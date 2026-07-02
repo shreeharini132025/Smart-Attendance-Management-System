@@ -98,7 +98,7 @@ export default function AdminDepartments() {
       </div>
 
       {loading ? (
-        <div className="loading-center"><div className="spinner-lg spinner" /></div>
+        <div className="loading-center"><div className="spinner-lg spinner" /><p style={{ color: 'var(--text-muted)' }}>Loading...</p></div>
       ) : filtered.length === 0 ? (
         <div className="card"><div className="empty-state"><Building2 size={48} /><h3>No departments found</h3><p>Add your first department to get started.</p></div></div>
       ) : (
