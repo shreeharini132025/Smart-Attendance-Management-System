@@ -300,13 +300,15 @@ export default function FacultySessions() {
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
-        <select className="form-select" style={{ width: 200 }} value={filters.faculty_subject_id} onChange={e => setFilters({ ...filters, faculty_subject_id: e.target.value })}>
+        <select className="form-select" style={{ flex: '1 1 200px', minWidth: 150 }} value={filters.faculty_subject_id} onChange={e => setFilters({ ...filters, faculty_subject_id: e.target.value })}>
           <option value="">All Subjects</option>
           {subjects.map(s => <option key={s.faculty_subject_id} value={s.faculty_subject_id}>{s.name}</option>)}
         </select>
-        <input type="date" className="form-input" style={{ width: 160 }} value={filters.from_date} onChange={e => setFilters({ ...filters, from_date: e.target.value })} />
-        <input type="date" className="form-input" style={{ width: 160 }} value={filters.to_date} onChange={e => setFilters({ ...filters, to_date: e.target.value })} />
-        <button className="btn btn-outline" onClick={load}><RefreshCw size={16} /> Refresh</button>
+        <div style={{ display: 'flex', gap: 8, flex: '2 1 300px', minWidth: 260 }}>
+          <input type="date" className="form-input" style={{ flex: 1, minWidth: 120 }} value={filters.from_date} onChange={e => setFilters({ ...filters, from_date: e.target.value })} />
+          <input type="date" className="form-input" style={{ flex: 1, minWidth: 120 }} value={filters.to_date} onChange={e => setFilters({ ...filters, to_date: e.target.value })} />
+        </div>
+        <button className="btn btn-outline" style={{ flex: '1 1 100px', minWidth: 100, justifyContent: 'center' }} onClick={load}><RefreshCw size={16} /> Refresh</button>
       </div>
 
       {loading ? <div className="loading-center"><div className="spinner-lg spinner" /><p style={{ color: 'var(--text-muted)' }}>Loading...</p></div> : (
