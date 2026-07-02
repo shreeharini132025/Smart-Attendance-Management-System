@@ -410,13 +410,13 @@ router.get('/reports/attendance', authorize('admin'), async (req, res) => {
     if (department_id) { query += ' AND s.department_id = ?'; params.push(department_id); }
     if (from_date) { query += ' AND cs.session_date >= ?'; params.push(from_date); }
     if (to_date) { query += ' AND cs.session_date <= ?'; params.push(to_date); }
-    query += ' GROUP BY s.id, sub.id ORDER BY u.name, sub.name';
+    query += ' GROUP BY s.id, u.name, s.roll_number, d.name, sub.id, sub.name, sub.code ORDER BY u.name, sub.name';
 
     const [rows] = await db.query(query, params);
     res.json({ success: true, data: rows });
   } catch (err) {
     console.error('Report error:', err);
-    res.status(500).json({ success: false, message: 'Server error.' });
+    res.status(500).json({ success: false, message: 'Server error.', debug: err.message, code: err.code });
   }
 });
 

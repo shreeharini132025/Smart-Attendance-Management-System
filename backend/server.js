@@ -145,7 +145,9 @@ app.use((err, req, res, next) => {
 
 // ── Start Server ────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
+const { initializeDatabase } = require('./config/database');
+
+server.listen(PORT, async () => {
   console.log(`
   ╔═══════════════════════════════════════════╗
   ║   Smart Attendance Management System      ║
@@ -153,6 +155,13 @@ server.listen(PORT, () => {
   ║   http://localhost:${PORT}                ║
   ╚═══════════════════════════════════════════╝
   `);
+  try {
+    console.log('🔄 Bootstrapping database schema...');
+    await initializeDatabase();
+    console.log('✅ Database schema initialized successfully');
+  } catch (err) {
+    console.error('❌ Database schema initialization failed:', err);
+  }
 });
 
 module.exports = { app, io };

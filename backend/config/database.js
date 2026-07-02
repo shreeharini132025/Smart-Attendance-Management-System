@@ -107,7 +107,7 @@ function resolveSslOptions() {
 }
 
 const sslOptions = resolveSslOptions();
-const schemaPath = path.join(__dirname, '..', 'db', 'schema.sql');
+const schemaPath = path.join(__dirname, '..', '..', 'database', 'schema.sql');
 
 function createUnavailablePool() {
   const error = new Error(
@@ -156,8 +156,7 @@ pool.getConnection
         conn.release();
       })
       .catch(err => {
-        console.error('❌ Database connection failed:', err.message);
-        process.exit(1);
+        console.error('❌ Database connection failed:', err);
       })
   : console.warn('⚠️ Database pool unavailable: missing configuration');
 
