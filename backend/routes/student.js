@@ -151,22 +151,29 @@ router.post('/attendance/mark-otp', async (req, res) => {
       return res.status(400).json({ success: false, message: 'A valid 6-digit OTP is required.' });
     }
 
-    // Find an active session whose OTP matches AND hasn't expired yet
+    // Find an active session whose OTP matches
     const [sessions] = await db.query(`
-      SELECT cs.*, fs.subject_id, fs.semester_id AS fs_semester_id, fs.faculty_id AS session_faculty_id
+      SELECT cs.*, fs.subject_id, fs.semester_id AS fs_semester_id, fs.faculty_id AS session_faculty_id,
+             NOW() AS db_now
       FROM class_sessions cs
       JOIN faculty_subjects fs ON cs.faculty_subject_id = fs.id
       WHERE cs.otp_code = ?
         AND cs.status = 'active'
-        AND cs.otp_expires_at IS NOT NULL
-        AND NOW() <= cs.otp_expires_at
     `, [String(otp).trim()]);
 
     if (!sessions.length) {
-      return res.status(400).json({ success: false, message: 'Invalid or expired OTP. Please check with your faculty.' });
+      return res.status(400).json({ success: false, message: 'Invalid OTP. Please check with your faculty.' });
     }
 
     const session = sessions[0];
+
+    // Check if the OTP is expired
+    if (session.otp_expires_at && new Date(session.db_now) > new Date(session.otp_expires_at)) {
+      return res.status(400).json({
+        success: false,
+        message: `OTP has expired. (Expiry: ${new Date(session.otp_expires_at).toLocaleTimeString()}, Server: ${new Date(session.db_now).toLocaleTimeString()}). Please ask your faculty to regenerate.`
+      });
+    }
 
     // ── Classroom restriction check ──────────────────────────
     // If classrooms are configured, this student must be in a classroom
