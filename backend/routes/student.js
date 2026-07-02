@@ -171,11 +171,34 @@ router.post('/attendance/mark-otp', async (req, res) => {
     // ── Classroom restriction check ──────────────────────────
     // If classrooms are configured, this student must be in a classroom
     // assigned to the faculty who owns this session.
+    // Check if student is enrolled in this session's subject
+    const [enrollCheck] = await db.query(`
+      SELECT id FROM student_enrollments
+      WHERE student_id = ? AND subject_id = ?
+    `, [studentId, session.subject_id]);
+
     const [classroomCheck] = await db.query(`
       SELECT cr.id FROM classrooms cr
       JOIN classroom_students cs2 ON cr.id = cs2.classroom_id
       WHERE cr.faculty_id = ? AND cs2.student_id = ? AND cr.is_active = 1
     `, [session.session_faculty_id, studentId]);
+
+    // Auto-assign to classroom if enrolled in subject but not yet in the classroom
+    if (enrollCheck.length && !classroomCheck.length) {
+      const [classroomRows] = await db.query(`
+        SELECT id FROM classrooms
+        WHERE faculty_id = ? AND subject_id = ? AND is_active = 1
+        LIMIT 1
+      `, [session.session_faculty_id, session.subject_id]);
+      
+      if (classroomRows.length) {
+        await db.query(`
+          INSERT IGNORE INTO classroom_students (classroom_id, student_id)
+          VALUES (?, ?)
+        `, [classroomRows[0].id, studentId]);
+        classroomCheck.push({ id: classroomRows[0].id });
+      }
+    }
 
     // Count total active classrooms for this faculty to know if restriction is enforced
     const [[{ facultyClassroomCount }]] = await db.query(
@@ -236,11 +259,34 @@ router.post('/attendance/mark-qr', async (req, res) => {
     const session = sessions[0];
 
     // ── Classroom restriction check ──────────────────────────
+    // Check if student is enrolled in this session's subject
+    const [enrollCheck] = await db.query(`
+      SELECT id FROM student_enrollments
+      WHERE student_id = ? AND subject_id = ?
+    `, [studentId, session.subject_id]);
+
     const [classroomCheck] = await db.query(`
       SELECT cr.id FROM classrooms cr
       JOIN classroom_students cs2 ON cr.id = cs2.classroom_id
       WHERE cr.faculty_id = ? AND cs2.student_id = ? AND cr.is_active = 1
     `, [session.session_faculty_id, studentId]);
+
+    // Auto-assign to classroom if enrolled in subject but not yet in the classroom
+    if (enrollCheck.length && !classroomCheck.length) {
+      const [classroomRows] = await db.query(`
+        SELECT id FROM classrooms
+        WHERE faculty_id = ? AND subject_id = ? AND is_active = 1
+        LIMIT 1
+      `, [session.session_faculty_id, session.subject_id]);
+      
+      if (classroomRows.length) {
+        await db.query(`
+          INSERT IGNORE INTO classroom_students (classroom_id, student_id)
+          VALUES (?, ?)
+        `, [classroomRows[0].id, studentId]);
+        classroomCheck.push({ id: classroomRows[0].id });
+      }
+    }
 
     const [[{ facultyClassroomCount }]] = await db.query(
       'SELECT COUNT(*) AS facultyClassroomCount FROM classrooms WHERE faculty_id = ? AND is_active = 1',
