@@ -191,18 +191,21 @@ router.post('/students', authorize('admin'), async (req, res) => {
 
 router.put('/students/:id', authorize('admin'), async (req, res) => {
   try {
-    const { name, email, phone, department_id, semester_id, batch_year, section, is_active } = req.body;
+    const { name, email, phone, department_id, semester_id, batch_year, section, dob, gender, address, guardian_name, guardian_phone, is_active } = req.body;
     const [student] = await db.query('SELECT user_id FROM students WHERE id = ?', [req.params.id]);
     if (!student.length) return res.status(404).json({ success: false, message: 'Student not found.' });
 
-    await db.query('UPDATE users SET name=?, email=?, phone=?, is_active=? WHERE id=?',
-      [name, email, phone, is_active, student[0].user_id]);
-    await db.query('UPDATE students SET department_id=?, semester_id=?, batch_year=?, section=? WHERE id=?',
-      [department_id, semester_id, batch_year, section, req.params.id]);
+    const finalDob = dob && String(dob).trim() !== '' ? dob : null;
 
-    res.json({ success: true, message: 'Student updated.' });
+    await db.query('UPDATE users SET name=?, email=?, phone=?, is_active=? WHERE id=?',
+      [name, email, phone, is_active !== undefined ? is_active : 1, student[0].user_id]);
+    await db.query('UPDATE students SET department_id=?, semester_id=?, batch_year=?, section=?, dob=?, gender=?, address=?, guardian_name=?, guardian_phone=? WHERE id=?',
+      [department_id, semester_id, batch_year, section, finalDob, gender, address, guardian_name, guardian_phone, req.params.id]);
+
+    res.json({ success: true, message: 'Student updated successfully.' });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error.' });
+    console.error('Update student error:', err);
+    res.status(500).json({ success: false, message: 'Server error.', debug: err.message });
   }
 });
 
@@ -266,18 +269,22 @@ router.post('/faculty', authorize('admin'), async (req, res) => {
 
 router.put('/faculty/:id', authorize('admin'), async (req, res) => {
   try {
-    const { name, email, phone, department_id, designation, is_active } = req.body;
+    const { name, email, phone, department_id, designation, faculty_id, qualification, experience_years, joining_date, is_active } = req.body;
     const [faculty] = await db.query('SELECT user_id FROM faculty WHERE id = ?', [req.params.id]);
     if (!faculty.length) return res.status(404).json({ success: false, message: 'Faculty not found.' });
 
-    await db.query('UPDATE users SET name=?, email=?, phone=?, is_active=? WHERE id=?',
-      [name, email, phone, is_active, faculty[0].user_id]);
-    await db.query('UPDATE faculty SET department_id=?, designation=? WHERE id=?',
-      [department_id, designation, req.params.id]);
+    const finalJoiningDate = joining_date && String(joining_date).trim() !== '' ? joining_date : null;
+    const finalExperience = experience_years !== undefined && experience_years !== '' ? Number(experience_years) : 0;
 
-    res.json({ success: true, message: 'Faculty updated.' });
+    await db.query('UPDATE users SET name=?, email=?, phone=?, is_active=? WHERE id=?',
+      [name, email, phone, is_active !== undefined ? is_active : 1, faculty[0].user_id]);
+    await db.query('UPDATE faculty SET department_id=?, designation=?, faculty_id=?, qualification=?, experience_years=?, joining_date=? WHERE id=?',
+      [department_id, designation, faculty_id, qualification, finalExperience, finalJoiningDate, req.params.id]);
+
+    res.json({ success: true, message: 'Faculty updated successfully.' });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error.' });
+    console.error('Update faculty error:', err);
+    res.status(500).json({ success: false, message: 'Server error.', debug: err.message });
   }
 });
 
