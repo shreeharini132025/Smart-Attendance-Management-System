@@ -95,21 +95,24 @@ app.get('/api/public-debug-db', async (req, res) => {
       }
     }
 
-    // Test students query
+    // Check row data
     try {
-      const query = `
-        SELECT s.*, u.name, u.email, u.phone, u.is_active, u.last_login,
-               d.name AS department_name, sem.name AS semester_name
-        FROM students s
-        JOIN users u ON s.user_id = u.id
-        JOIN departments d ON s.department_id = d.id
-        JOIN semesters sem ON s.semester_id = sem.id
-        ORDER BY u.name
-      `;
-      const [rows] = await db.query(query);
-      info.studentsQuery = { status: 'SUCCESS', count: rows.length };
+      const [users] = await db.query('SELECT id, name, email, role FROM users');
+      const [faculty] = await db.query('SELECT * FROM faculty');
+      const [fs] = await db.query('SELECT * FROM faculty_subjects');
+      const [sessions] = await db.query('SELECT id, faculty_subject_id, session_date, status FROM class_sessions');
+      const [records] = await db.query('SELECT id, session_id, student_id, status FROM attendance_records');
+      
+      info.data = {
+        users,
+        faculty,
+        faculty_subjects: fs,
+        class_sessions: sessions,
+        attendance_records_count: records.length,
+        attendance_records: records
+      };
     } catch (err) {
-      info.studentsQuery = { status: 'FAILED', error: err.message, code: err.code };
+      info.dataFetchError = err.message;
     }
 
     res.json(info);
