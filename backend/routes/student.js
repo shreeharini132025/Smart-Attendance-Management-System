@@ -332,7 +332,8 @@ async function _recordAttendance(res, session, studentId, otp, device_fingerprin
     return res.status(400).json({ success: false, message: 'Attendance already marked as present for this session.' });
   }
 
-  // 2. Device fingerprint check (only if this device hasn't been used for a DIFFERENT student)
+  // 2. Device fingerprint check (disabled so anyone can submit OTP from any device)
+  /*
   if (device_fingerprint) {
     const [deviceCheck] = await db.query(
       'SELECT id FROM attendance_records WHERE session_id = ? AND device_fingerprint = ? AND student_id != ?',
@@ -342,6 +343,7 @@ async function _recordAttendance(res, session, studentId, otp, device_fingerprin
       return res.status(400).json({ success: false, message: 'Another student has already marked attendance from this device.' });
     }
   }
+  */
 
   // 3. Upsert the attendance record
   if (existing.length) {
